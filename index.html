@@ -9,7 +9,7 @@
         #game-container { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; max-width: 600px; width: 100%; }
         .quiz-area { display: flex; justify-content: center; gap: 10px; margin: 30px 0; min-height: 80px; align-items: center; flex-wrap: wrap; }
         .syllable-block { padding: 15px 20px; background: #e9ecef; border-radius: 10px; font-size: 2rem; font-weight: bold; color: #495057; border: 2px solid #dee2e6; }
-        .blank-block { width: 80px; height: 60px; border: 3px dashed #007bff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #007bff; background: #f0f7ff; transition: all 0.3s; }
+        .blank-block { width: auto; min-width: 60px; height: auto; border: 3px dashed #007bff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #007bff; background: #f0f7ff; transition: all 0.3s; }
         .blank-block.error { border-color: #dc3545; background: #fff5f5; color: #dc3545; }
         .blank-block.wrong-final { border-color: #6c757d; background: #e9ecef; color: #dc3545; }
         .options-area { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
@@ -17,7 +17,7 @@
         .option-btn:disabled { opacity: 0.3; }
         .btn-main { padding: 12px 24px; font-size: 1.1rem; cursor: pointer; background: #FF8C00; color: white; border: none; border-radius: 8px; margin-bottom: 20px; font-weight: bold; }
         #log { margin-top: 30px; text-align: left; font-size: 0.9rem; border-top: 2px solid #eee; padding-top: 15px; width: 100%; }
-        .loading { font-size: 1.2rem; color: #666; }
+        .final-screen { padding: 40px 20px; text-align: center; }
     </style>
 </head>
 <body>
@@ -40,7 +40,7 @@
 </div>
 
 <script>
-    // --- 在這裡貼上你的 Google 表格 CSV 網址 ---
+    // --- 請在此處貼上妳的 Google 表格 CSV 網址 ---
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQGoncK1abaJuKI-Y92FSt77nQUuEhwZEs9B2BVuzz4qhOxYJxRD3w4X3aH28EwPq61nU_TEPtgRA3b/pub?output=csv'; 
 
     let quizBank = [];
@@ -49,147 +49,57 @@
     let errorCount = 0;
     let isLocked = true;
 
-    // 從 Google 表格讀取資料
     async function fetchQuizData() {
         try {
             const response = await fetch(csvUrl);
             const data = await response.text();
-            const rows = data.split('\n').slice(1); // 跳過標題列
+            const rows = data.split('\n').slice(1); 
             
             quizBank = rows.map(row => {
                 const cols = row.split(',');
                 if(cols.length < 4) return null;
                 return {
                     word: cols[0].trim(),
-                    blocks: cols[1].trim().split('|'), // 表格中請用 | 分隔音節
+                    blocks: cols[1].trim().split('|'), 
                     answer: cols[2].trim(),
-                    options: cols[3].trim().split('|') // 表格中請用 | 分隔選項
+                    options: cols[3].trim().split('|') 
                 };
             }).filter(q => q !== null);
 
             document.getElementById('instruction').innerText = "菜單讀取成功！";
             document.getElementById('game-content').style.display = 'block';
+            loadQuiz();
+        } catch (error) {
+            document.getElementById('instruction').innerText = "讀取失敗，請檢查網路或 CSV 網址。";
+        }
+    }
+
     function loadQuiz() {
         const data = quizBank[currentIdx];
+        if (!data) return;
+
         errorCount = 0;
         isLocked = true;
         document.getElementById('instruction').innerText = "點擊播放聽發音";
         
-        // --- 根據單字長度自動調整字體大小 ---
+        // 根據單字長度自動調整字體大小
         const wordLength = data.word.length;
-        let fontSize = "2rem"; // 預設大小
+        let fontSize = "2rem"; 
         let paddingSize = "15px 20px";
 
         if (wordLength > 12) {
-            fontSize = "1.2rem"; // 超長單字
+            fontSize = "1.2rem"; 
             paddingSize = "8px 12px";
         } else if (wordLength > 9) {
-            fontSize = "1.5rem"; // 中長單字
+            fontSize = "1.5rem"; 
             paddingSize = "10px 15px";
         }
 
         document.getElementById('quizArea').innerHTML = data.blocks.map(b => 
             b === "??" ? 
-            `<div class="blank-block" id="blank" style="font-size: ${fontSize}; width: auto; min-width: 60px; padding: ${paddingSize};">?</div>` : 
+            `<div class="blank-block" id="blank" style="font-size: ${fontSize}; padding: ${paddingSize};">?</div>` : 
             `<div class="syllable-block" style="font-size: ${fontSize}; padding: ${paddingSize};">${b}</div>`
         ).join('');
-        // -----------------------------------
 
         const shuffledOptions = [...data.options].sort(() => Math.random() - 0.5);
-        document.getElementById('optionsArea').innerHTML = shuffledOptions.map(opt => 
-            `<button class="option-btn" onclick="checkAnswer('${opt}')">${opt}</button>`
-        ).join('');
-    };
-        } catch (error) {
-            document.getElementById('instruction').innerText = "讀取失敗，請檢查網路或網址。";
-        }
-    }
-
-    function loadQuiz() {
-        const data = quizBank[currentIdx];
-        errorCount = 0;
-        isLocked = true;
-        document.getElementById('instruction').innerText = "點擊播放聽發音";
-        
-        document.getElementById('quizArea').innerHTML = data.blocks.map(b => 
-            b === "??" ? `<div class="blank-block" id="blank">?</div>` : `<div class="syllable-block">${b}</div>`
-        ).join('');
-
-        const shuffledOptions = [...data.options].sort(() => Math.random() - 0.5);
-        document.getElementById('optionsArea').innerHTML = shuffledOptions.map(opt => 
-            `<button class="option-btn" onclick="checkAnswer('${opt}')">${opt}</button>`
-        ).join('');
-    }
-
-    function playAudio() {
-        const data = quizBank[currentIdx];
-        const msg = new SpeechSynthesisUtterance(data.word);
-        msg.lang = 'en-US';
-        msg.rate = 1.0; 
-        msg.pitch = 1.1;
-        window.speechSynthesis.speak(msg);
-
-        const blank = document.getElementById('blank');
-        if (blank && blank.classList.contains('error')) {
-            blank.classList.remove('error');
-            blank.innerText = "?";
-        }
-        
-        if (isLocked) {
-            startTime = Date.now();
-            isLocked = false;
-            document.getElementById('instruction').innerText = "請選出正確音節！";
-        }
-    }
-
-    function checkAnswer(selected) {
-        if (isLocked) return;
-
-        const data = quizBank[currentIdx];
-        const blank = document.getElementById('blank');
-        const reactionTime = (Date.now() - startTime) / 1000;
-
-        if (selected === data.answer) {
-            blank.innerText = selected;
-            blank.style.background = "#d4edda";
-            blank.style.borderColor = "#28a745";
-            disableOptions();
-            logData(data.word, reactionTime, "成功");
-        } else {
-            errorCount++;
-            if (errorCount >= 2) {
-                blank.innerText = data.answer;
-                blank.className = "blank-block wrong-final";
-                disableOptions();
-                logData(data.word, reactionTime, "失敗 (已顯示答案)");
-            } else {
-                blank.className = "blank-block error";
-                blank.innerText = "!";
-                isLocked = true;
-                document.getElementById('instruction').innerText = "辨識錯誤！請重聽再試";
-            }
-        }
-    }
-
-    function disableOptions() {
-        const btns = document.getElementsByClassName('option-btn');
-        for(let btn of btns) btn.disabled = true;
-        isLocked = true;
-    }
-
-    function logData(word, time, status) {
-        const row = document.createElement('div');
-        row.innerHTML = `📍 <b>${word}</b>: ${status} (${time}s)`;
-        document.getElementById('dataRows').prepend(row);
-    }
-
-    function nextQuestion() {
-        currentIdx = (currentIdx + 1) % quizBank.length;
-        loadQuiz();
-    }
-
-    fetchQuizData(); // 啟動時讀取資料
-</script>
-
-</body>
-</html>
+        document.getElementById('optionsArea').innerHTML = shuffledOptions.map(opt =>
