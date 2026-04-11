@@ -40,7 +40,7 @@
 </div>
 
 <script>
-    // --- 請在此處貼上妳的 Google 表格 CSV 網址 ---
+    // --- 1. 請在此處貼上妳的 Google 表格 CSV 網址 ---
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQGoncK1abaJuKI-Y92FSt77nQUuEhwZEs9B2BVuzz4qhOxYJxRD3w4X3aH28EwPq61nU_TEPtgRA3b/pub?output=csv'; 
 
     let quizBank = [];
@@ -49,28 +49,44 @@
     let errorCount = 0;
     let isLocked = true;
 
+    // 取得網址參數 (例如 ?cat=U1)
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetSource = urlParams.get('cat'); 
+
     async function fetchQuizData() {
         try {
             const response = await fetch(csvUrl);
             const data = await response.text();
             const rows = data.split('\n').slice(1); 
             
-            quizBank = rows.map(row => {
+            const allData = rows.map(row => {
                 const cols = row.split(',');
-                if(cols.length < 4) return null;
+                if(cols.length < 5) return null; 
                 return {
-                    word: cols[0].trim(),
-                    blocks: cols[1].trim().split('|'), 
-                    answer: cols[2].trim(),
-                    options: cols[3].trim().split('|') 
+                    source: cols[0].trim(),
+                    word: cols[1].trim(),
+                    blocks: cols[2].trim().split('|'),
+                    answer: cols[3].trim(),
+                    options: cols[4].trim().split('|')
                 };
             }).filter(q => q !== null);
 
-            document.getElementById('instruction').innerText = "菜單讀取成功！";
-            document.getElementById('game-content').style.display = 'block';
-            loadQuiz();
+            // 根據網址參數篩選分類
+            if (targetSource) {
+                quizBank = allData.filter(q => q.source.toLowerCase() === targetSource.toLowerCase());
+            } else {
+                quizBank = allData;
+            }
+
+            if (quizBank.length === 0) {
+                document.getElementById('instruction').innerText = "找不到該分類的菜單，請檢查表格或網址。";
+            } else {
+                document.getElementById('instruction').innerText = `已載入「${targetSource || '全部'}」菜單`;
+                document.getElementById('game-content').style.display = 'block';
+                loadQuiz();
+            }
         } catch (error) {
-            document.getElementById('instruction').innerText = "讀取失敗，請檢查網路或 CSV 網址。";
+            document.getElementById('instruction').innerText = "讀取失敗，請檢查網路。";
         }
     }
 
@@ -102,4 +118,98 @@
         ).join('');
 
         const shuffledOptions = [...data.options].sort(() => Math.random() - 0.5);
-        document.getElementById('optionsArea').innerHTML = shuffledOptions.map(opt =>
+        document.getElementById('optionsArea').innerHTML = shuffledOptions.map(opt => 
+            `<button class="option-btn" onclick="checkAnswer('${opt}')">${opt}</button>`
+        ).join('');
+    }
+
+    function playAudio() {
+        const data = quizBank[currentIdx];
+        if (!data) return;
+        const msg = new SpeechSynthesisUtterance(data.word);
+        msg.lang = 'en-US';
+        msg.rate = 0.9; 
+        window.speechSynthesis.speak(msg);
+
+        const blank = document.getElementById('blank');
+        if (blank && blank.classList.contains('error')) {
+            blank.classList.remove('error');
+            blank.innerText = "?";
+        }
+        
+        if (isLocked) {
+            startTime = Date.now();
+            isLocked = false;
+            document.getElementById('instruction').innerText = "請選出正確音節！";
+        }
+    }
+
+    function checkAnswer(selected) {
+        if (isLocked) return;
+        const data = quizBank[currentIdx];
+        const blank = document.getElementById('blank');
+        const reactionTime = (Date.now() - startTime) / 1000;
+
+        if (selected === data.answer) {
+            blank.innerText = selected;
+            blank.style.background = "#d4edda";
+            blank.style.borderColor = "#28a745";
+            disableOptions();
+            logData(data.word, reactionTime, "成功");
+        } else {
+            errorCount++;
+            if (errorCount >= 2) {
+                blank.innerText = data.answer;
+                blank.className = "blank-block wrong-final";
+                disableOptions();
+                logData(data.word, reactionTime, "失敗 (已顯示答案)");
+            } else {
+                blank.className = "blank-block error";
+                blank.innerText = "!";
+                isLocked = true;
+                document.getElementById('instruction').innerText = "辨識錯誤！請重聽再試";
+            }
+        }
+    }
+
+    function disableOptions() {
+        const btns = document.getElementsByClassName('option-btn');
+        for(let btn of btns) btn.disabled = true;
+        isLocked = true;
+    }
+
+    function logData(word, time, status) {
+        const row = document.createElement('div');
+        row.innerHTML = `📍 <b>${word}</b>: ${status} (${time}s)`;
+        document.getElementById('dataRows').prepend(row);
+    }
+
+    function nextQuestion() {
+        if (currentIdx < quizBank.length - 1) {
+            currentIdx++;
+            loadQuiz();
+        } else {
+            showFinalResult();
+        }
+    }
+
+    function showFinalResult() {
+        const gameContent = document.getElementById('game-content');
+        gameContent.innerHTML = `
+            <div class="final-screen">
+                <h1 style="font-size: 3rem;">🎉</h1>
+                <h2 style="color: #28a745;">點餐完成！</h2>
+                <p style="font-size: 1.1rem; color: #666;">今日的單字餐點已全部備齊囉！<br>做得太棒了！</p>
+                <button class="btn-main" onclick="location.reload()" style="background: #007bff; margin-top: 20px;">
+                    重新練習 (Restart)
+                </button>
+            </div>
+        `;
+        document.getElementById('instruction').innerText = "See you next time!";
+    }
+
+    fetchQuizData();
+</script>
+
+</body>
+</html>
