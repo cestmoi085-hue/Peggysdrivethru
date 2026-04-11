@@ -69,7 +69,37 @@
 
             document.getElementById('instruction').innerText = "菜單讀取成功！";
             document.getElementById('game-content').style.display = 'block';
-            loadQuiz();
+            function loadQuiz() {
+        const data = quizBank[currentIdx];
+        errorCount = 0;
+        isLocked = true;
+        document.getElementById('instruction').innerText = "點擊播放聽發音";
+        
+        // --- 根據單字長度自動調整字體大小 ---
+        const wordLength = data.word.length;
+        let fontSize = "2rem"; // 預設大小
+        let paddingSize = "15px 20px";
+
+        if (wordLength > 12) {
+            fontSize = "1.2rem"; // 超長單字
+            paddingSize = "8px 12px";
+        } else if (wordLength > 9) {
+            fontSize = "1.5rem"; // 中長單字
+            paddingSize = "10px 15px";
+        }
+
+        document.getElementById('quizArea').innerHTML = data.blocks.map(b => 
+            b === "??" ? 
+            `<div class="blank-block" id="blank" style="font-size: ${fontSize}; width: auto; min-width: 60px; padding: ${paddingSize};">?</div>` : 
+            `<div class="syllable-block" style="font-size: ${fontSize}; padding: ${paddingSize};">${b}</div>`
+        ).join('');
+        // -----------------------------------
+
+        const shuffledOptions = [...data.options].sort(() => Math.random() - 0.5);
+        document.getElementById('optionsArea').innerHTML = shuffledOptions.map(opt => 
+            `<button class="option-btn" onclick="checkAnswer('${opt}')">${opt}</button>`
+        ).join('');
+    };
         } catch (error) {
             document.getElementById('instruction').innerText = "讀取失敗，請檢查網路或網址。";
         }
