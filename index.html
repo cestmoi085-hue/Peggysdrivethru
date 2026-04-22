@@ -149,13 +149,12 @@
         const data = quizBank[currentIdx];
         const blank = document.getElementById('blank');
         const reactionTime = (Date.now() - startTime) / 1000;
+
+        // --- 安全比對邏輯 (移除前後空格) ---
         const cleanSelected = selected.trim();
         const cleanAnswer = data.answer.trim();
 
-        if (cleanSelected === cleanAnswer) { // 改用處理過的變數來比對
-            blank.innerText = selected;
-
-        if (selected === data.answer) {
+        if (cleanSelected === cleanAnswer) { 
             blank.innerText = selected;
             blank.style.background = "#d4edda";
             blank.style.borderColor = "#28a745";
@@ -176,7 +175,7 @@
             }
         }
     }
-
+    
     function disableOptions() {
         const btns = document.getElementsByClassName('option-btn');
         for(let btn of btns) btn.disabled = true;
