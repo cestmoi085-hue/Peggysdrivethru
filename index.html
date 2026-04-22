@@ -149,6 +149,11 @@
         const data = quizBank[currentIdx];
         const blank = document.getElementById('blank');
         const reactionTime = (Date.now() - startTime) / 1000;
+        const cleanSelected = selected.trim();
+        const cleanAnswer = data.answer.trim();
+
+        if (cleanSelected === cleanAnswer) { // 改用處理過的變數來比對
+            blank.innerText = selected;
 
         if (selected === data.answer) {
             blank.innerText = selected;
