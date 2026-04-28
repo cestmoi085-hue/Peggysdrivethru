@@ -76,28 +76,34 @@
 </div>
 
 <script>
-    // --- CSV 網址 ---
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQGoncK1abaJuKI-Y92FSt77nQUuEhwZEs9B2BVuzz4qhOxYJxRD3w4X3aH28EwPq61nU_TEPtgRA3b/pub?output=csv'; 
 
-    let allQuizData = []; // 存儲 CSV 讀取的全部原始數據
-    let quizBank = [];    // 存儲篩選並洗牌後的題目清單
+    let allQuizData = []; 
+    let quizBank = [];    
     let currentIdx = 0;
     let startTime;
     let errorCount = 0;
     let isLocked = true;
 
-    // 1. 初始化讀取資料
+    // 清理標籤內容的輔助函式 (移除空格及各種引號)
+    function cleanTagName(str) {
+        if (!str) return "";
+        return str.trim()
+                  .replace(/^["'“‘]|["'”’]$/g, '') // 移除前後半形或全形引號
+                  .trim();
+    }
+
     async function initData() {
         try {
             const response = await fetch(csvUrl);
             const data = await response.text();
-            const rows = data.split('\n').slice(1); // 略過標題列
+            const rows = data.split('\n').slice(1); 
             
             allQuizData = rows.map(row => {
                 const cols = row.split(',');
                 if(cols.length < 5) return null; 
                 return {
-                    source: cols[0].trim(),
+                    source: cols[0], // 暫不 trim，留給標籤解析器處理
                     word: cols[1].trim(),
                     blocks: cols[2].trim().split('|').map(s => s.trim()),
                     answer: cols[3].trim(),
@@ -105,21 +111,19 @@
                 };
             }).filter(q => q !== null);
 
-            populateCategories(); // 自動填入分類選單
+            populateCategories();
             document.getElementById('instruction').innerText = "歡迎！請選擇菜單與題數。";
             document.getElementById('setup-container').style.display = 'block';
         } catch (error) {
             document.getElementById('instruction').innerText = "讀取失敗，請確認 CSV 網址。";
-            console.error(error);
         }
     }
 
-    // 2. 自動抓取標籤填入下拉選單
     function populateCategories() {
         const categorySet = new Set();
         allQuizData.forEach(q => {
             q.source.split(',').forEach(tag => {
-                const cleanTag = tag.trim();
+                const cleanTag = cleanTagName(tag);
                 if(cleanTag) categorySet.add(cleanTag);
             });
         });
@@ -135,26 +139,22 @@
         });
     }
 
-    // 3. 開始遊戲：篩選、洗牌、取樣
     function startGame() {
         const selectedCat = document.getElementById('categorySelect').value;
         const selectedAmount = document.getElementById('amountSelect').value;
         
-        // 篩選
         let filtered = [];
         if (selectedCat === "ALL") {
             filtered = [...allQuizData];
         } else {
             filtered = allQuizData.filter(q => {
-                const tags = q.source.split(',').map(tag => tag.trim().toLowerCase());
+                const tags = q.source.split(',').map(tag => cleanTagName(tag).toLowerCase());
                 return tags.includes(selectedCat.toLowerCase());
             });
         }
 
-        // --- 防重複重複邏輯：先洗牌 (Shuffle) ---
         filtered.sort(() => Math.random() - 0.5);
 
-        // --- 取樣邏輯：根據使用者選擇的題數拿取 (Slice) ---
         if (selectedAmount !== "all") {
             const num = parseInt(selectedAmount);
             quizBank = filtered.slice(0, num);
@@ -173,43 +173,38 @@
         }
     }
 
-    // 4. 載入題目
     function loadQuiz() {
         const data = quizBank[currentIdx];
         if (!data) return;
 
         errorCount = 0;
-        isLocked = true; // 需先播放音檔才能作答
+        isLocked = true; 
         document.getElementById('instruction').innerText = "🔊 點擊播放聽發音，然後開始點餐";
         
-        // 調整字體大小以適應長單字
         const wordLength = data.word.length;
         let fontSize = "2rem"; 
         let paddingSize = "15px 20px";
         if (wordLength > 12) { fontSize = "1.2rem"; paddingSize = "8px 12px"; }
         else if (wordLength > 9) { fontSize = "1.5rem"; paddingSize = "10px 15px"; }
 
-        // 渲染題目區
         document.getElementById('quizArea').innerHTML = data.blocks.map(b => 
             b === "??" ? 
             `<div class="blank-block" id="blank" style="font-size: ${fontSize}; padding: ${paddingSize};">?</div>` : 
             `<div class="syllable-block" style="font-size: ${fontSize}; padding: ${paddingSize};">${b}</div>`
         ).join('');
 
-        // 渲染選項區 (再次隨機選項順序)
         const shuffledOptions = [...data.options].sort(() => Math.random() - 0.5);
         document.getElementById('optionsArea').innerHTML = shuffledOptions.map(opt => 
             `<button class="option-btn" onclick="checkAnswer('${opt}')">${opt}</button>`
         ).join('');
     }
 
-    // 5. 播放語音
     function playAudio() {
         const data = quizBank[currentIdx];
         if (!data) return;
         const msg = new SpeechSynthesisUtterance(data.word);
         msg.lang = 'en-US';
-        msg.rate = 0.85; // 稍微放慢一點點
+        msg.rate = 0.85;
         window.speechSynthesis.speak(msg);
 
         const blank = document.getElementById('blank');
@@ -225,7 +220,6 @@
         }
     }
 
-    // 6. 檢查答案
     function checkAnswer(selected) {
         if (isLocked) return;
         const data = quizBank[currentIdx];
@@ -254,14 +248,12 @@
         }
     }
 
-    // 停用按鈕
     function disableOptions() {
         const btns = document.getElementsByClassName('option-btn');
         for(let btn of btns) btn.disabled = true;
         isLocked = true;
     }
 
-    // 7. 記錄與回饋
     function logData(word, time, status) {
         const row = document.createElement('div');
         row.style.padding = "8px 12px";
@@ -285,7 +277,6 @@
         document.getElementById('dataRows').prepend(row);
     }
     
-    // 8. 下一題或結束
     function nextQuestion() {
         if (currentIdx < quizBank.length - 1) {
             currentIdx++;
@@ -301,7 +292,6 @@
             <div class="final-screen">
                 <h1 style="font-size: 4rem;">🥳</h1>
                 <h2 style="color: #28a745;">全部餐點處理完畢！</h2>
-                <p style="color: #666;">做得太棒了！今天也有進步喔！</p>
                 <button class="btn-main" onclick="location.reload()" style="background: #007bff; margin-top: 20px;">
                     回主選單 (Restart)
                 </button>
@@ -310,7 +300,7 @@
         document.getElementById('instruction').innerText = "Enjoy your meal!";
     }
 
-    initData(); // 啟動
+    initData();
 </script>
 
 </body>
