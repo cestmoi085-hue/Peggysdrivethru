@@ -7,15 +7,28 @@
     <style>
         body { font-family: 'Helvetica Neue', Arial, sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f8f9fa; padding: 20px; }
         #game-container { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); text-align: center; max-width: 600px; width: 100%; }
+        
+        /* 選單區域樣式 */
+        .setup-area { margin: 20px 0; padding: 20px; background: #fff5e6; border-radius: 15px; border: 1px solid #ffcc80; }
+        .setup-row { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; }
+        .setup-item { text-align: left; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #d35400; }
+        select { padding: 12px; font-size: 1.1rem; border-radius: 8px; border: 2px solid #FF8C00; width: 100%; cursor: pointer; background: white; }
+        
         .quiz-area { display: flex; justify-content: center; gap: 15px; margin: 30px 0; min-height: 80px; align-items: center; flex-wrap: wrap; }
         .syllable-block { padding: 15px 20px; background: #e9ecef; border-radius: 10px; font-size: 2rem; font-weight: bold; color: #495057; border: 2px solid #dee2e6; }
         .blank-block { width: auto; min-width: 60px; height: auto; border: 3px dashed #007bff; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #007bff; background: #f0f7ff; transition: all 0.3s; }
         .blank-block.error { border-color: #dc3545; background: #fff5f5; color: #dc3545; }
         .blank-block.wrong-final { border-color: #6c757d; background: #e9ecef; color: #dc3545; }
+        
         .options-area { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
-        .option-btn { padding: 12px 25px; font-size: 1.5rem; cursor: pointer; background: white; border: 2px solid #007bff; color: #007bff; border-radius: 50px; font-weight: bold; }
-        .option-btn:disabled { opacity: 0.3; }
-        .btn-main { padding: 12px 24px; font-size: 1.1rem; cursor: pointer; background: #FF8C00; color: white; border: none; border-radius: 8px; margin-bottom: 20px; font-weight: bold; }
+        .option-btn { padding: 12px 25px; font-size: 1.5rem; cursor: pointer; background: white; border: 2px solid #007bff; color: #007bff; border-radius: 50px; font-weight: bold; transition: 0.2s; }
+        .option-btn:active { background: #007bff; color: white; }
+        .option-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        .btn-main { padding: 15px 24px; font-size: 1.2rem; cursor: pointer; background: #FF8C00; color: white; border: none; border-radius: 10px; margin-bottom: 20px; font-weight: bold; width: 100%; }
+        .btn-next { background: #28a745; margin-top: 20px; }
+        
         #log { margin-top: 30px; text-align: left; font-size: 0.9rem; border-top: 2px solid #eee; padding-top: 15px; width: 100%; }
         .final-screen { padding: 40px 20px; text-align: center; }
     </style>
@@ -23,14 +36,37 @@
 <body>
 
 <div id="game-container">
-    <h2 style="color: #FF8C00;">Peggy's Drive-thru 🍟</h2>
-    <p id="instruction">讀取菜單中...</p>
+    <h2 style="color: #FF8C00; margin-bottom: 5px;">Peggy's Drive-thru 🍟</h2>
+    <p id="instruction" style="color: #666;">讀取菜單中，請稍候...</p>
     
+    <div id="setup-container" class="setup-area" style="display:none;">
+        <div class="setup-row">
+            <div class="setup-item">
+                <label>選個分類吧：</label>
+                <select id="categorySelect">
+                    <option value="">正在載入...</option>
+                </select>
+            </div>
+            <div class="setup-item">
+                <label>今天吃多少？（題數）：</label>
+                <select id="amountSelect">
+                    <option value="10">兒童餐 (10 題)</option>
+                    <option value="20" selected>標準餐 (20 題)</option>
+                    <option value="40">飽足餐 (40 題)</option>
+                    <option value="60">分享餐 (60 題)</option>
+                    <option value="100">挑戰者套餐 (100 題)</option>
+                    <option value="all">吃到飽 (全部複習)</option>
+                </select>
+            </div>
+        </div>
+        <button class="btn-main" onclick="startGame()">開始點餐 (Start Game)</button>
+    </div>
+
     <div id="game-content" style="display:none;">
         <button class="btn-main" onclick="playAudio()" id="playBtn">🔊 聽發音點餐</button>
         <div class="quiz-area" id="quizArea"></div>
         <div class="options-area" id="optionsArea"></div>
-        <button class="btn-main" style="margin-top:20px; background:#28a745" onclick="nextQuestion()">下一份餐點 (Next)</button>
+        <button class="btn-main btn-next" onclick="nextQuestion()">下一份餐點 (Next)</button>
     </div>
 
     <div id="log">
@@ -40,25 +76,24 @@
 </div>
 
 <script>
-    // --- 請在此處貼上妳的 Google 表格 CSV 網址 ---
+    // --- CSV 網址 ---
     const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQGoncK1abaJuKI-Y92FSt77nQUuEhwZEs9B2BVuzz4qhOxYJxRD3w4X3aH28EwPq61nU_TEPtgRA3b/pub?output=csv'; 
 
-    let quizBank = [];
+    let allQuizData = []; // 存儲 CSV 讀取的全部原始數據
+    let quizBank = [];    // 存儲篩選並洗牌後的題目清單
     let currentIdx = 0;
     let startTime;
     let errorCount = 0;
     let isLocked = true;
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const targetSource = urlParams.get('cat'); 
-
-    async function fetchQuizData() {
+    // 1. 初始化讀取資料
+    async function initData() {
         try {
             const response = await fetch(csvUrl);
             const data = await response.text();
-            const rows = data.split('\n').slice(1); 
+            const rows = data.split('\n').slice(1); // 略過標題列
             
-            const allData = rows.map(row => {
+            allQuizData = rows.map(row => {
                 const cols = row.split(',');
                 if(cols.length < 5) return null; 
                 return {
@@ -70,67 +105,111 @@
                 };
             }).filter(q => q !== null);
 
-            // 1. 先篩選分類
-            let filteredData = [];
-            if (targetSource) {
-                filteredData = allData.filter(q => q.source.toLowerCase() === targetSource.toLowerCase());
-            } else {
-                filteredData = allData;
-            }
-
-            // 2. --- 隨機打亂題目順序 ---
-            quizBank = filteredData.sort(() => Math.random() - 0.5);
-
-            if (quizBank.length === 0) {
-                document.getElementById('instruction').innerText = "找不到該分類的菜單 (Check ?cat=)";
-            } else {
-                document.getElementById('instruction').innerText = `已載入「${targetSource || '全部'}」菜單 (隨機出餐中)`;
-                document.getElementById('game-content').style.display = 'block';
-                loadQuiz();
-            }
+            populateCategories(); // 自動填入分類選單
+            document.getElementById('instruction').innerText = "歡迎！請選擇菜單與題數。";
+            document.getElementById('setup-container').style.display = 'block';
         } catch (error) {
             document.getElementById('instruction').innerText = "讀取失敗，請確認 CSV 網址。";
+            console.error(error);
         }
     }
 
+    // 2. 自動抓取標籤填入下拉選單
+    function populateCategories() {
+        const categorySet = new Set();
+        allQuizData.forEach(q => {
+            q.source.split(',').forEach(tag => {
+                const cleanTag = tag.trim();
+                if(cleanTag) categorySet.add(cleanTag);
+            });
+        });
+
+        const select = document.getElementById('categorySelect');
+        select.innerHTML = '<option value="ALL">全部單字複習</option>';
+        
+        Array.from(categorySet).sort().forEach(cat => {
+            const opt = document.createElement('option');
+            opt.value = cat;
+            opt.innerText = cat;
+            select.appendChild(opt);
+        });
+    }
+
+    // 3. 開始遊戲：篩選、洗牌、取樣
+    function startGame() {
+        const selectedCat = document.getElementById('categorySelect').value;
+        const selectedAmount = document.getElementById('amountSelect').value;
+        
+        // 篩選
+        let filtered = [];
+        if (selectedCat === "ALL") {
+            filtered = [...allQuizData];
+        } else {
+            filtered = allQuizData.filter(q => {
+                const tags = q.source.split(',').map(tag => tag.trim().toLowerCase());
+                return tags.includes(selectedCat.toLowerCase());
+            });
+        }
+
+        // --- 防重複重複邏輯：先洗牌 (Shuffle) ---
+        filtered.sort(() => Math.random() - 0.5);
+
+        // --- 取樣邏輯：根據使用者選擇的題數拿取 (Slice) ---
+        if (selectedAmount !== "all") {
+            const num = parseInt(selectedAmount);
+            quizBank = filtered.slice(0, num);
+        } else {
+            quizBank = filtered;
+        }
+
+        if (quizBank.length === 0) {
+            alert("此分類下目前沒有單字喔！");
+        } else {
+            document.getElementById('setup-container').style.display = 'none';
+            document.getElementById('game-content').style.display = 'block';
+            document.getElementById('instruction').innerText = `已載入「${selectedCat}」共 ${quizBank.length} 份餐點`;
+            currentIdx = 0;
+            loadQuiz();
+        }
+    }
+
+    // 4. 載入題目
     function loadQuiz() {
         const data = quizBank[currentIdx];
         if (!data) return;
 
         errorCount = 0;
-        isLocked = true;
-        document.getElementById('instruction').innerText = "點擊播放聽發音";
+        isLocked = true; // 需先播放音檔才能作答
+        document.getElementById('instruction').innerText = "🔊 點擊播放聽發音，然後開始點餐";
         
+        // 調整字體大小以適應長單字
         const wordLength = data.word.length;
         let fontSize = "2rem"; 
         let paddingSize = "15px 20px";
+        if (wordLength > 12) { fontSize = "1.2rem"; paddingSize = "8px 12px"; }
+        else if (wordLength > 9) { fontSize = "1.5rem"; paddingSize = "10px 15px"; }
 
-        if (wordLength > 12) {
-            fontSize = "1.2rem"; 
-            paddingSize = "8px 12px";
-        } else if (wordLength > 9) {
-            fontSize = "1.5rem"; 
-            paddingSize = "10px 15px";
-        }
-
+        // 渲染題目區
         document.getElementById('quizArea').innerHTML = data.blocks.map(b => 
             b === "??" ? 
             `<div class="blank-block" id="blank" style="font-size: ${fontSize}; padding: ${paddingSize};">?</div>` : 
             `<div class="syllable-block" style="font-size: ${fontSize}; padding: ${paddingSize};">${b}</div>`
         ).join('');
 
+        // 渲染選項區 (再次隨機選項順序)
         const shuffledOptions = [...data.options].sort(() => Math.random() - 0.5);
         document.getElementById('optionsArea').innerHTML = shuffledOptions.map(opt => 
             `<button class="option-btn" onclick="checkAnswer('${opt}')">${opt}</button>`
         ).join('');
     }
 
+    // 5. 播放語音
     function playAudio() {
         const data = quizBank[currentIdx];
         if (!data) return;
         const msg = new SpeechSynthesisUtterance(data.word);
         msg.lang = 'en-US';
-        msg.rate = 0.9; 
+        msg.rate = 0.85; // 稍微放慢一點點
         window.speechSynthesis.speak(msg);
 
         const blank = document.getElementById('blank');
@@ -142,17 +221,17 @@
         if (isLocked) {
             startTime = Date.now();
             isLocked = false;
-            document.getElementById('instruction').innerText = "請選出正確選項！";
+            document.getElementById('instruction').innerText = "請點選正確的音節！";
         }
     }
 
+    // 6. 檢查答案
     function checkAnswer(selected) {
         if (isLocked) return;
         const data = quizBank[currentIdx];
         const blank = document.getElementById('blank');
         const reactionTime = (Date.now() - startTime) / 1000;
 
-        // --- 強力比對邏輯：雙方都去空格後比較 ---
         if (selected.trim() === data.answer.trim()) {
             blank.innerText = selected;
             blank.style.background = "#d4edda";
@@ -170,48 +249,43 @@
                 blank.className = "blank-block error";
                 blank.innerText = "!";
                 isLocked = true;
-                document.getElementById('instruction').innerText = "再試一次！請重聽發音";
+                document.getElementById('instruction').innerText = "聽起來不太對喔，再試一次！";
             }
         }
     }
 
+    // 停用按鈕
     function disableOptions() {
         const btns = document.getElementsByClassName('option-btn');
         for(let btn of btns) btn.disabled = true;
         isLocked = true;
     }
 
+    // 7. 記錄與回饋
     function logData(word, time, status) {
         const row = document.createElement('div');
-        row.style.padding = "5px 10px";
+        row.style.padding = "8px 12px";
         row.style.margin = "5px 0";
-        row.style.borderRadius = "5px";
+        row.style.borderRadius = "8px";
         row.style.fontSize = "1rem";
         
         let feedback = "";
         let bgColor = "";
 
         if (status === "成功") {
-            if (time <= 3) {
-                feedback = "⭐⭐⭐ 極速！";
-                bgColor = "#d4edda"; // 淺綠
-            } else if (time <= 7) {
-                feedback = "⭐⭐ 很棒喔";
-                bgColor = "#fff3cd"; // 淺黃
-            } else {
-                feedback = "⭐ 慢慢來，可以更好";
-                bgColor = "#f8f9fa"; // 淺灰
-            }
+            if (time <= 3) { feedback = "🚀 極速！"; bgColor = "#d4edda"; }
+            else if (time <= 7) { feedback = "👍 很棒"; bgColor = "#fff3cd"; }
+            else { feedback = "🐌 慢慢來，再加油"; bgColor = "#f8f9fa"; }
         } else {
-            feedback = "❌ 需複習";
-            bgColor = "#f8d7da"; // 淺紅
+            feedback = "❌ 需複習"; bgColor = "#f8d7da";
         }
 
         row.style.backgroundColor = bgColor;
-        row.innerHTML = `<b>${word}</b> | ${feedback} <small>(${time}s)</small>`;
+        row.innerHTML = `<b>${word}</b> | ${feedback} <small>(${time.toFixed(1)}s)</small>`;
         document.getElementById('dataRows').prepend(row);
     }
     
+    // 8. 下一題或結束
     function nextQuestion() {
         if (currentIdx < quizBank.length - 1) {
             currentIdx++;
@@ -225,18 +299,18 @@
         const gameContent = document.getElementById('game-content');
         gameContent.innerHTML = `
             <div class="final-screen">
-                <h1 style="font-size: 3rem;">🎉</h1>
-                <h2 style="color: #28a745;">點餐完成！</h2>
-                <p style="font-size: 1.1rem; color: #666;">今日菜單已全部練習完畢！<br>做的太棒了！</p>
+                <h1 style="font-size: 4rem;">🥳</h1>
+                <h2 style="color: #28a745;">全部餐點處理完畢！</h2>
+                <p style="color: #666;">做得太棒了！今天也有進步喔！</p>
                 <button class="btn-main" onclick="location.reload()" style="background: #007bff; margin-top: 20px;">
-                    重新練習 (Restart)
+                    回主選單 (Restart)
                 </button>
             </div>
         `;
         document.getElementById('instruction').innerText = "Enjoy your meal!";
     }
 
-    fetchQuizData();
+    initData(); // 啟動
 </script>
 
 </body>
